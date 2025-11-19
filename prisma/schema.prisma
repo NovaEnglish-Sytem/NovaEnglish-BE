@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  STUDENT
+  TUTOR
+  ADMIN
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE_NOT_GIVEN
+  SHORT_ANSWER
+}
+
+enum MediaType {
+  IMAGE
+  AUDIO
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum PaperStatus {
+  DRAFT
+  PUBLISHED
+}
+
+// ============================================================================
+// AUTH & USER
+// ============================================================================
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  fullName        String
+  phoneE164       String?
+  role            Role      @default(STUDENT)
+  isEmailVerified Boolean   @default(false)
+  placeOfBirth    String?
+  dateOfBirth     DateTime?
+  gender          Gender?
+  lastLogin       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  verificationTokens VerificationToken[]
+  resetTokens        PasswordResetToken[]
+  refreshTokens      RefreshToken[]
+  
+  // Student test data
+  testRecords      TestRecord[]
+  testAttempts     TestAttempt[]
+  activeSessions   ActiveTestSession[]
+
+  @@index([role])
+  @@index([email])
+  @@index([lastLogin])
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model RefreshToken {
+  id                  String    @id @default(uuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash           String    @unique
+  expiresAt           DateTime
+  createdAt           DateTime  @default(now())
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============================================================================
+// QUESTION MANAGEMENT (Tutor)
+// ============================================================================
+
+// Category: Listening, Reading, Use of English, dll
+model QuestionCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique // e.g., "Listening", "Reading"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  packages        QuestionPackage[]
+
+  @@index([name])
+}
+
+// Package: Bundle soal dengan pages (TANPA TestPaper middle layer)
+model QuestionPackage {
+  id             String           @id @default(uuid())
+  categoryId     String
+  category       QuestionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  title          String           // Format: "list-pkg001", "read-pkg002" (category prefix + package number)
+  totalQuestions Int              @default(0) // Cache: total questions
+  durationMinutes Int             @default(0)
+  status         PaperStatus      @default(DRAFT)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // Relations
+  pages          QuestionPage[]
+  attempts       TestAttempt[]
+
+  @@unique([categoryId, title]) // Unique title per category
+  @@index([categoryId])
+  @@index([status])
+}
+
+// Page: Halaman dalam package (dengan story/instructions)
+model QuestionPage {
+  id           String          @id @default(uuid())
+  packageId    String
+  package      QuestionPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  pageOrder    Int
+  storyPassage String?         @db.Text // HTML content
+  instructions String?         @db.Text // HTML content
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relations
+  questions QuestionItem[]
+  mediaAssets MediaAsset[] @relation("PageMedia")
+
+  @@index([packageId, pageOrder])
+}
+
+// MediaAsset: Image/Audio untuk questions
+model MediaAsset {
+  id        String    @id @default(uuid())
+  type      MediaType
+  url       String    // Public URL
+  storageKey String   @unique // File key under UPLOAD_DIR
+  // Ownership: either page or item (enforced in API)
+  pageId    String?
+  page      QuestionPage? @relation("PageMedia", fields: [pageId], references: [id], onDelete: Cascade)
+  itemId    String?
+  item      QuestionItem? @relation("ItemMedia", fields: [itemId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([pageId, type])
+  @@unique([itemId, type])
+}
+
+// QuestionItem: Soal dalam page
+model QuestionItem {
+  id          String       @id @default(uuid())
+  pageId      String
+  page        QuestionPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  itemOrder   Int
+  type        QuestionType
+  question    String       @db.Text
+  
+  // For MCQ & TFNG
+  choicesJson Json?
+  correctKey  String?
+  
+  // For SHORT_ANSWER
+  answerText  Json?
+  
+  // Optional media (0..2 rows in MediaAsset via relation name)
+  mediaAssets MediaAsset[] @relation("ItemMedia")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([pageId, itemOrder])
+}
+
+// ============================================================================
+// BAND SCORE & FEEDBACK
+// ============================================================================
+
+// BandScore: IELTS-like scoring bands (used for on-the-fly conversion in UI)
+model BandScore {
+  id       String   @id @default(uuid())
+  band     String   @unique // "1.0", "1.5", "2.0", ... "9.0"
+  minScore Int      // Percentage min (0-100)
+  maxScore Int      // Percentage max (0-100)
+  order    Int      // Display order
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  feedbacks Feedback[]
+
+  @@index([order])
+  @@index([band])
+}
+
+// Feedback: Tutor feedback per band score
+model Feedback {
+  id          String     @id @default(uuid())
+  bandScoreId String
+  bandScore   BandScore  @relation(fields: [bandScoreId], references: [id], onDelete: Cascade)
+  text        String     @db.Text
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([bandScoreId])
+}
+
+// ============================================================================
+// STUDENT TEST FLOW
+// ============================================================================
+
+// TestRecord: Multi-category test session (e.g., full IELTS test)
+model TestRecord {
+  id           String  @id @default(uuid())
+  studentId    String
+  student      User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  averageScore Float?  // Average score from all attempts (2 decimal places)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  attempts       TestAttempt[]
+  activeSessions ActiveTestSession[]
+
+  @@index([studentId])
+}
+
+// TestAttempt: Single package attempt with snapshot data
+model TestAttempt {
+  id              String          @id @default(uuid())
+  packageId       String
+  package         QuestionPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  studentId       String
+  student         User            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recordId        String?         // Link to TestRecord for multi-category tests
+  record          TestRecord?     @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  
+  // Snapshot fields (preserved even if package/category deleted)
+  packageTitle    String?
+  categoryName    String?
+  
+  startedAt       DateTime   @default(now())
+  completedAt     DateTime?
+  totalScore      Int        @default(0)
+
+
+  // Relations
+  activeSession    ActiveTestSession?
+  temporaryAnswers TemporaryAnswer[]
+
+  @@index([studentId])
+  @@index([packageId])
+  @@index([recordId])
+  @@index([completedAt])
+}
+
+// ActiveTestSession: Session protection & device switching
+model ActiveTestSession {
+  id           String     @id @default(uuid())
+  studentId    String     @unique // One active session per student
+  student      User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attemptId    String     @unique
+  attempt      TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  sessionToken String     @unique
+  
+  // Test context (for navigation & history)
+  recordId     String?
+  record       TestRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  categoryId   String?    // Current category ID
+  categoryName String?    // Current category name
+  packageId    String?    // Selected package ID (for history tracking)
+  turnNumber   Int?       // Turn number (for history tracking)
+  
+  // Session data
+  metadata     Json?      // {currentPageIndex, testMeta, etc}
+  expiresAt    DateTime
+  lastActivity DateTime   @default(now())
+  createdAt    DateTime   @default(now())
+
+  @@index([studentId])
+  @@index([attemptId])
+  @@index([sessionToken])
+  @@index([expiresAt])
+  @@index([recordId])
+}
+
+// TemporaryAnswer: Auto-save answers (hybrid localStorage + DB)
+model TemporaryAnswer {
+  id             String      @id @default(uuid())
+  attemptId      String
+  attempt        TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  itemId         String      // QuestionItem ID
+  selectedKey    String?
+  textAnswer     Json?       // For SHORT_ANSWER (array of strings)
+  audioPlayCount Int         @default(0) // Track audio plays (max 2)
+  createdAt      DateTime    @default(now())
+
+  @@unique([attemptId, itemId])
+  @@index([attemptId])
+  @@index([createdAt])
+}
