@@ -37,4 +37,4 @@ nul
 next-api/nul
 
 # ignore all file media
-/next-api/uploads
+uploads/**
