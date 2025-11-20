@@ -53,16 +53,21 @@ export async function sendVerificationEmail({ to, verifyUrl, appName = 'Nova Eng
     ? `${expiryMinutes / 1440} day${expiryMinutes / 1440 > 1 ? 's' : ''}`
     : `${expiryMinutes} minute${expiryMinutes > 1 ? 's' : ''}`
   const footerText = `This link is valid for ${durationText}.`
+  const year = new Date().getFullYear()
+  const preheaderText = `Verify your ${appName} account to start your English test.`
   const html = await renderTemplate('verifyEmail.html', {
     app_name: appName,
     action_url: verifyUrl,
     support_email: env.smtp.user || 'support@' + env.appDomain,
     footer_text: footerText,
+    year,
+    preheader_text: preheaderText,
   })
   return sendEmail({
     to,
     subject: `${appName} — Verify your email address`,
     html,
+    text: `Thank you for signing up to ${appName}. To verify your email, open this link in your browser: ${verifyUrl}`,
   })
 }
 
@@ -72,28 +77,38 @@ export async function sendPasswordResetEmail({ to, resetUrl, appName = 'Nova Eng
     ? `${expiryMinutes / 1440} day${expiryMinutes / 1440 > 1 ? 's' : ''}`
     : `${expiryMinutes} minute${expiryMinutes > 1 ? 's' : ''}`
   const footerText = `This link is valid for ${durationText}.`
+  const year = new Date().getFullYear()
+  const preheaderText = `Reset your ${appName} password.`
   const html = await renderTemplate('resetPassword.html', {
     app_name: appName,
     action_url: resetUrl,
     support_email: env.smtp.user || 'support@' + env.appDomain,
     footer_text: footerText,
+    year,
+    preheader_text: preheaderText,
   })
   return sendEmail({
     to,
     subject: `${appName} — Reset your password`,
     html,
+    text: `We received a request to reset your ${appName} password. If this was you, open this link in your browser to continue: ${resetUrl}`,
   })
 }
 
 export async function sendPasswordChangedEmail({ to, appName = 'Nova English' }) {
+  const year = new Date().getFullYear()
+  const preheaderText = `Your ${appName} password was changed.`
   const html = await renderTemplate('passwordChanged.html', {
     app_name: appName,
     support_email: env.smtp.user || 'support@' + env.appDomain,
+    year,
+    preheader_text: preheaderText,
   })
   return sendEmail({
     to,
     subject: `${appName} — Your password was changed`,
     html,
+    text: `This is a confirmation that your ${appName} password was changed. If this wasn't you, please reset your password immediately and contact support.`,
   })
 }
 

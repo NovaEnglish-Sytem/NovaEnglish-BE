@@ -14,6 +14,21 @@
       color: #333;
     "
   >
+    <!-- Preheader text: improves deliverability and inbox preview -->
+    <div
+      style="
+        display: none !important;
+        visibility: hidden;
+        font-size: 1px;
+        line-height: 1px;
+        max-height: 0;
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+      "
+    >
+      {{preheader_text}}
+    </div>
     <table
       role="presentation"
       border="0"
@@ -127,9 +142,6 @@
               </td>
             </tr>
           </table>
-          <script>
-            document.getElementById("y").textContent = new Date().getFullYear();
-          </script>
         </td>
       </tr>
     </table>
