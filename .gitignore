@@ -1,5 +1,26 @@
-# Logs
-logs
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.local
+
+# Production build
+.next/
+out/
+build/
+dist/
+dist-ssr/
+.vite/
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,34 +28,71 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-.vite
-.next
-coverage
-*.local
-next-api/.next
-next-api/coverage
+# PM2
+.pm2/
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Keep templates
+!.env.example
+# !.env.production
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Env files
-.env
-next-api/.env
-
-# Windows reserved device artifacts
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 nul
-next-api/nul
 
-# ignore all file media
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Media uploads
 uploads/**
+!uploads/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Prisma
+prisma/.env
+
+# documentation
+*.md
+!README.md
