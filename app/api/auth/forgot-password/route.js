@@ -54,17 +54,20 @@ export async function POST(request) {
       return generic()
     }
 
-    // Create reset token
+    // Create reset token (ensure only a single active token per user)
     const { token, tokenHash } = generateTokenPair(32)
     const expiresAt = new Date(Date.now() + envHelpers.getPasswordResetTtlMs())
 
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
-    })
+    await prisma.$transaction([
+      prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        },
+      }),
+    ])
 
     const resetUrl = `${env.appUrl}/account/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(user.email)}`
 
