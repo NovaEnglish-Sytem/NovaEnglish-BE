@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start -p ${PORT:-3001}",
+    "start": "bash start_safe.sh",
     "deploy": "npm run prisma:generate && npm run prisma:deploy && npm run build",
     "postinstall": "npm run deploy",
     "prisma:generate": "prisma generate",
