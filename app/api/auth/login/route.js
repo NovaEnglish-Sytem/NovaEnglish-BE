@@ -99,7 +99,12 @@ export async function POST(request) {
 
     // Enforce single device login: invalidate sessions/tokens
     await prisma.$transaction([
-      // Revoke all existing refresh tokens (logs out all devices)
+      // Update lastLogin timestamp
+      prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date(loginTimestamp) }
+      }),
+      // Revoke all existing refresh tokens for this user (logs out all devices after current access token expires)
       prisma.refreshToken.updateMany({
         where: { userId: user.id, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -108,14 +113,11 @@ export async function POST(request) {
       prisma.refreshToken.deleteMany({
         where: { userId: user.id, expiresAt: { lt: new Date() } },
       }),
-      // Cleanup completed sessions only (expired sessions already auto-submitted)
-      prisma.temporaryAnswer.deleteMany({ where: { attemptId: { in: cleanupAttemptIds } } }),
-      prisma.activeTestSession.deleteMany({ where: { id: { in: cleanupSessionIds } } }),
-      // Update lastLogin timestamp
-      prisma.user.update({
-        where: { id: user.id },
-        data: { lastLogin: new Date(loginTimestamp) }
-      }),
+      ...(user.role === 'STUDENT' ? [
+        // Cleanup completed sessions only (expired sessions already auto-submitted)
+        prisma.temporaryAnswer.deleteMany({ where: { attemptId: { in: cleanupAttemptIds } } }),
+        prisma.activeTestSession.deleteMany({ where: { id: { in: cleanupSessionIds } } }),
+      ] : []),
     ])
 
     // Access JWT with lastLoginAt for session validation (3 hours)

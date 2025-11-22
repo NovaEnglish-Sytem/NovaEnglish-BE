@@ -122,9 +122,9 @@ export async function POST(request) {
     }
 
     if (preparedCategories.length === 0) {
-      return sendError('No available published packages for selected categories', 422, {
+      return sendError('This test is not available right now.', 422, {
         unavailableCategories,
-        hint: 'Publish at least one package (status = PUBLISHED) in each selected category.'
+        hint: 'Your tutor may have just unpublished the question package. Please try again later or contact your tutor.'
       })
     }
 
