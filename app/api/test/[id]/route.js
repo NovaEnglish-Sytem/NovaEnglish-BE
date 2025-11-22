@@ -103,11 +103,11 @@ export async function GET(request, { params }) {
     const pages = attempt.package?.pages || []
     const totalPages = pages.length
     
-    // Calculate total questions (SHORT_ANSWER counts blanks)
+    // Calculate total questions (SHORT_ANSWER & MATCHING_DROPDOWN count blanks)
     let totalQuestions = 0
     for (const page of pages) {
       for (const qi of page.questions) {
-        if (qi.type === 'SHORT_ANSWER') {
+        if (qi.type === 'SHORT_ANSWER' || qi.type === 'MATCHING_DROPDOWN') {
           const matches = (qi.question || '').match(/\[[^\]]*\]/g) || []
           totalQuestions += Math.max(1, matches.length)
         } else {
@@ -120,9 +120,9 @@ export async function GET(request, { params }) {
 
     // Transform question item to frontend format
     const transformQuestion = (item) => {
-      // Parse choices from JSON
+      // Parse choices from JSON (for MCQ, TFNG, MATCHING_DROPDOWN, etc.)
       let choices = []
-      if (item.type === 'MULTIPLE_CHOICE' && item.choicesJson) {
+      if (item.choicesJson) {
         try {
           const choicesObj = typeof item.choicesJson === 'string' 
             ? JSON.parse(item.choicesJson) 
@@ -165,6 +165,13 @@ export async function GET(request, { params }) {
         return {
           ...base,
           shortTemplate: item.question || '',
+        }
+      }
+
+      if (item.type === 'MATCHING_DROPDOWN') {
+        return {
+          ...base,
+          matchingTemplate: item.question || '',
         }
       }
 

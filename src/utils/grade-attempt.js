@@ -12,7 +12,7 @@ function buildAnswersFromTemp(tempAnswers, items) {
       if (ta.selectedKey) {
         answers.push({ itemId: ta.itemId, type: item.type, value: ta.selectedKey })
       }
-    } else if (item.type === 'SHORT_ANSWER') {
+    } else if (item.type === 'SHORT_ANSWER' || item.type === 'MATCHING_DROPDOWN') {
       const arr = Array.isArray(ta.textAnswer)
         ? ta.textAnswer
         : (ta.textAnswer == null ? [] : [String(ta.textAnswer)])
@@ -36,7 +36,7 @@ function gradeAnswers(answers, items) {
       continue
     }
 
-    if (item.type === 'SHORT_ANSWER') {
+    if (item.type === 'SHORT_ANSWER' || item.type === 'MATCHING_DROPDOWN') {
       const norm = (s) => String(s ?? '')
         .toLowerCase()
         .normalize('NFKD')
@@ -89,7 +89,7 @@ export async function gradeAttempt(attemptId, tx = prisma) {
   // Count totalQuestions per-blank
   let totalQuestions = 0
   for (const it of items) {
-    if (it.type === 'SHORT_ANSWER') {
+    if (it.type === 'SHORT_ANSWER' || it.type === 'MATCHING_DROPDOWN') {
       const blanks = (String(it.question || '').match(/\[[^\]]*\]/g) || []).length || 1
       totalQuestions += blanks
     } else {

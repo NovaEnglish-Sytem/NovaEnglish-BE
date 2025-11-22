@@ -41,6 +41,13 @@ export function transformQuestionsToDraft(pages) {
           const shortTemplate = it.question || ''
           return { id: it.id, type: 'SHORT', shortTemplate, media }
         }
+        if (it.type === 'MATCHING_DROPDOWN') {
+          const matchingTemplate = it.question || ''
+          const options = Array.isArray(it.choicesJson)
+            ? it.choicesJson.map(c => (typeof c === 'string' ? c : (c?.text || '')))
+            : []
+          return { id: it.id, type: 'MATCHING', matchingTemplate, optionsText: options.join('\n'), media }
+        }
         return { id: it.id, type: 'MCQ', text: '', options: [], correctIndex: null, media }
       })
     }
@@ -56,8 +63,14 @@ export function buildContentSnapshot(pages) {
       audioUrl: (pg.mediaAssets || []).find(m => m.type === 'AUDIO')?.url || '',
     },
     questions: (pg.questions || []).map(it => ({
-      type: it.type === 'MULTIPLE_CHOICE' ? 'MCQ' : (it.type === 'TRUE_FALSE_NOT_GIVEN' ? 'TFNG' : (it.type === 'SHORT_ANSWER' ? 'SHORT' : 'MCQ')),
-      text: it.type === 'SHORT_ANSWER' ? undefined : (it.question || ''),
+      type: it.type === 'MULTIPLE_CHOICE'
+        ? 'MCQ'
+        : (it.type === 'TRUE_FALSE_NOT_GIVEN'
+          ? 'TFNG'
+          : (it.type === 'SHORT_ANSWER'
+            ? 'SHORT'
+            : (it.type === 'MATCHING_DROPDOWN' ? 'MATCHING' : 'MCQ'))),
+      text: (it.type === 'SHORT_ANSWER' || it.type === 'MATCHING_DROPDOWN') ? undefined : (it.question || ''),
       options: Array.isArray(it.choicesJson) ? it.choicesJson.map(c => (typeof c === 'string' ? c : (c?.text || ''))) : undefined,
       correctIndex: (() => {
         if (it.type !== 'MULTIPLE_CHOICE') return undefined
@@ -66,6 +79,7 @@ export function buildContentSnapshot(pages) {
       })(),
       correctTFNG: it.type === 'TRUE_FALSE_NOT_GIVEN' ? (it.correctKey || null) : undefined,
       shortTemplate: it.type === 'SHORT_ANSWER' ? (it.question || '') : undefined,
+      matchingTemplate: it.type === 'MATCHING_DROPDOWN' ? (it.question || '') : undefined,
       mediaUrls: {
         imageUrl: (it.mediaAssets || []).find(m => m.type === 'IMAGE')?.url || '',
         audioUrl: (it.mediaAssets || []).find(m => m.type === 'AUDIO')?.url || '',

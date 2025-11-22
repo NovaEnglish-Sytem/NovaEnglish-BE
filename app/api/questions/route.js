@@ -187,7 +187,7 @@ export async function POST(request) {
           const common = {
             pageId: pageIdForItems,
             itemOrder: j + 1,
-            question: q.text || q.shortTemplate || '',
+            question: q.text || q.shortTemplate || q.matchingTemplate || '',
           }
           // Map FE type to DB type fields
           let patch = {}
@@ -223,6 +223,22 @@ export async function POST(request) {
               answerText: answers,
             }
             // Ensure saved question uses the template (with brackets)
+            common.question = tpl
+          } else if (q.type === 'MATCHING') {
+            const tpl = String(q.matchingTemplate || q.text || '')
+            const matches = tpl.match(/\[([^\]]*)\]/g) || []
+            // Store answers as lowercase for consistent matching and preview
+            const answers = matches.map(m => m.replace(/^\[|\]$/g, '').trim().toLowerCase())
+            // Dropdown options = unique answers from template (keys lowercase; UI can capitalize labels)
+            const uniqueAnswers = Array.from(new Set(answers.filter(a => a.length > 0)))
+            const choicesJson = uniqueAnswers.map(text => ({ text }))
+
+            patch = {
+              type: 'MATCHING_DROPDOWN',
+              choicesJson,
+              correctKey: null,
+              answerText: answers,
+            }
             common.question = tpl
           }
 

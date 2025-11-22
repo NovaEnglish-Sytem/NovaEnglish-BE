@@ -19,7 +19,7 @@ export async function POST(request, { params }) {
       return sendError('Invalid request body', 400)
     }
     
-    const { answers, audioCounts = {} } = body
+    const { answers, audioCounts = {}, currentPageIndex = 0, meta = null } = body
     
     // Quick verify (no heavy queries)
     const attempt = await prisma.testAttempt.findFirst({
@@ -31,7 +31,7 @@ export async function POST(request, { params }) {
       return sendSuccess({ saved: 0, message: 'Test already completed or not found' })
     }
     
-    // Fast batch insert/update to TemporaryAnswer (simplified for speed)
+    // Fast batch insert/update to TemporaryAnswer (aligned with save-answers semantics)
     if (Array.isArray(answers) && answers.length > 0) {
       await prisma.$transaction(
         answers.map(ans => {
@@ -40,14 +40,15 @@ export async function POST(request, { params }) {
               ? String(ans.value || '')
               : null
 
-          // SHORT_ANSWER as array JSON
+          // SHORT_ANSWER & MATCHING_DROPDOWN expect an array of strings; normalize safely
           let textAnswer = null
-          if (ans.type === 'SHORT_ANSWER') {
+          if (ans.type === 'SHORT_ANSWER' || ans.type === 'MATCHING_DROPDOWN') {
             if (Array.isArray(ans.value)) {
               textAnswer = ans.value.map(v => String(v ?? '').trim().toLowerCase())
             } else if (ans.value == null) {
               textAnswer = []
             } else {
+              // Backward-compat: single string -> single-element array
               textAnswer = [String(ans.value || '').trim().toLowerCase()]
             }
           } else if (ans.value == null) {
@@ -97,7 +98,7 @@ export async function POST(request, { params }) {
       )
     }
 
-    // Merge page-level counts into ActiveTestSession.metadata.audioCountsMap
+    // Merge page-level counts into ActiveTestSession.metadata.audioCountsMap and persist page index + meta
     const activeSession = await prisma.activeTestSession.findFirst({ where: { attemptId } })
     const existingMeta = (activeSession && activeSession.metadata) ? activeSession.metadata : {}
     const existingCounts = existingMeta.audioCountsMap && typeof existingMeta.audioCountsMap === 'object' ? existingMeta.audioCountsMap : {}
@@ -109,9 +110,22 @@ export async function POST(request, { params }) {
         nextCounts[key] = Math.max(prev, incoming)
       }
     }
+
+    const metadataToSave = {
+      ...existingMeta,
+      audioCountsMap: nextCounts,
+      currentPageIndex,
+      lastSyncAt: new Date().toISOString()
+    }
+
+    // Include meta if provided (for cross-browser support)
+    if (meta && typeof meta === 'object') {
+      metadataToSave.testMeta = meta
+    }
+
     await prisma.activeTestSession.updateMany({
       where: { attemptId },
-      data: { metadata: { ...existingMeta, audioCountsMap: nextCounts, lastSyncAt: new Date().toISOString() } }
+      data: { metadata: metadataToSave }
     })
     
     return sendSuccess({ 

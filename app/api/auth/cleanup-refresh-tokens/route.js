@@ -11,14 +11,20 @@ export async function POST(request) {
 
     // Prune revoked refresh tokens older than retention window
     const cutoffDate = envHelpers.getRevokedPruneCutoffDate()
+    const now = new Date()
 
     const result = await prisma.refreshToken.deleteMany({
       where: {
-        revokedAt: { not: null, lt: cutoffDate }
-      }
+        OR: [
+          // Revoked tokens older than retention window
+          { revokedAt: { not: null, lt: cutoffDate } },
+          // Any tokens that are already expired, regardless of revoked status
+          { expiresAt: { lt: now } },
+        ],
+      },
     })
 
-    return json({ ok: true, deleted: result.count, cutoff: cutoffDate.toISOString() }, 200)
+    return json({ ok: true, deleted: result.count, cutoff: cutoffDate.toISOString(), now: now.toISOString() }, 200)
   } catch (err) {
     console.error('Cleanup refresh tokens error:', err)
     return serverError('Failed to cleanup refresh tokens')

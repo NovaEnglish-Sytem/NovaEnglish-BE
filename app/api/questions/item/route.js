@@ -22,7 +22,9 @@ export async function POST(request) {
     const pageId = String(body?.pageId || '')
     const type = String(body?.type || '')
     if (!pageId) return sendError('pageId is required', 400)
-    if (!['MULTIPLE_CHOICE','TRUE_FALSE_NOT_GIVEN','SHORT_ANSWER'].includes(type)) return sendError('Invalid type', 400)
+    if (!['MULTIPLE_CHOICE','TRUE_FALSE_NOT_GIVEN','SHORT_ANSWER','MATCHING_DROPDOWN'].includes(type)) {
+      return sendError('Invalid type', 400)
+    }
 
     const page = await prisma.questionPage.findFirst({ where: { id: pageId }, select: { id: true } })
     if (!page) return sendError('QuestionPage not found', 404)
@@ -30,20 +32,42 @@ export async function POST(request) {
     const maxOrderRow = await prisma.questionItem.findFirst({ where: { pageId }, orderBy: { itemOrder: 'desc' } })
     const itemOrder = (maxOrderRow?.itemOrder || 0) + 1
 
-    // Normalize SHORT_ANSWER inputs
+    // Normalize templated question & answers
     let question = String(body?.question || '')
     let answerText = null
-    if (type === 'SHORT_ANSWER') {
-      // Prefer extracting from bracketed template
+    if (type === 'SHORT_ANSWER' || type === 'MATCHING_DROPDOWN') {
+      // Prefer extracting from bracketed template, e.g. "text [answer] more text [answer2]"
       const matches = question.match(/\[([^\]]*)\]/g) || []
       if (matches.length > 0) {
-        answerText = matches.map(m => m.replace(/^\[|\]$/g, '').trim())
+        answerText = matches.map(m => m.replace(/^\[|\]$/g, '').trim().toLowerCase())
       } else if (Array.isArray(body?.answerText)) {
-        answerText = body.answerText.map(v => String(v ?? '').trim())
+        answerText = body.answerText.map(v => String(v ?? '').trim().toLowerCase())
       } else if (typeof body?.answerText === 'string' && body.answerText.length > 0) {
-        answerText = [String(body.answerText).trim()]
+        answerText = [String(body.answerText).trim().toLowerCase()]
       } else {
         answerText = []
+      }
+    }
+
+    // Normalize options for MATCHING_DROPDOWN (stored in choicesJson)
+    let choicesJson = type === 'MULTIPLE_CHOICE' ? [] : null
+    if (type === 'MATCHING_DROPDOWN') {
+      const rawOpts = body?.options
+      if (Array.isArray(rawOpts) && rawOpts.length > 0) {
+        choicesJson = rawOpts
+          .map((o) => {
+            if (typeof o === 'string') {
+              return { text: String(o || '').trim() }
+            }
+            if (!o) return null
+            const text = String(o.text ?? o.label ?? o.value ?? '').trim()
+            return text ? { text } : null
+          })
+          .filter(Boolean)
+      } else if (Array.isArray(answerText) && answerText.length > 0) {
+        // Fallback: use unique answers from template as options
+        const uniqueAnswers = Array.from(new Set(answerText.filter(a => a && a.length > 0)))
+        choicesJson = uniqueAnswers.map(text => ({ text }))
       }
     }
 
@@ -52,7 +76,7 @@ export async function POST(request) {
       itemOrder,
       type,
       question,
-      choicesJson: type === 'MULTIPLE_CHOICE' ? [] : null,
+      choicesJson,
       correctKey: null,
       answerText,
     }

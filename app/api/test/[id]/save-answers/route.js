@@ -74,9 +74,9 @@ export async function POST(request, { params }) {
           const isChoice = ans.type === 'MULTIPLE_CHOICE' || ans.type === 'TRUE_FALSE_NOT_GIVEN'
           const selectedKey = isChoice ? String(ans.value || '') : null
 
-          // SHORT_ANSWER expects an array of strings; normalize safely
+          // SHORT_ANSWER & MATCHING_DROPDOWN expect an array of strings; normalize safely
           let textAnswer = null
-          if (ans.type === 'SHORT_ANSWER') {
+          if (ans.type === 'SHORT_ANSWER' || ans.type === 'MATCHING_DROPDOWN') {
             if (Array.isArray(ans.value)) {
               textAnswer = ans.value.map(v => String(v ?? '').trim().toLowerCase())
             } else if (ans.value == null) {

@@ -21,6 +21,7 @@ enum QuestionType {
   MULTIPLE_CHOICE
   TRUE_FALSE_NOT_GIVEN
   SHORT_ANSWER
+  MATCHING_DROPDOWN
 }
 
 enum MediaType {

@@ -73,10 +73,10 @@ export async function POST(request, { params }) {
     
     // Get all questions from package
     const items = attempt.package.pages.flatMap(p => p.questions)
-    // Count total questions PER BLANK for SHORT_ANSWER (aligns with GET route)
+    // Count total questions PER BLANK for SHORT_ANSWER & MATCHING_DROPDOWN (aligns with GET route)
     let totalQuestions = 0
     for (const it of items) {
-      if (it.type === 'SHORT_ANSWER') {
+      if (it.type === 'SHORT_ANSWER' || it.type === 'MATCHING_DROPDOWN') {
         const blanks = (String(it.question || '').match(/\[[^\]]*\]/g) || []).length || 1
         totalQuestions += blanks
       } else {
@@ -84,7 +84,7 @@ export async function POST(request, { params }) {
       }
     }
     
-    // Grade answers (per-blank for SHORT_ANSWER)
+    // Grade answers (per-blank for SHORT_ANSWER & MATCHING_DROPDOWN)
     const { correctCount } = gradeAnswers(answers, items)
     
     // Calculate percentage score and store as integer (0–100)
@@ -185,7 +185,7 @@ function gradeAnswers(answers, items) {
       continue
     }
 
-    if (item.type === 'SHORT_ANSWER') {
+    if (item.type === 'SHORT_ANSWER' || item.type === 'MATCHING_DROPDOWN') {
       // Normalize helper: lowercase, remove diacritics/punct, collapse spaces
       const norm = (s) => String(s ?? '')
         .toLowerCase()
