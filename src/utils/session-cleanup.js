@@ -28,36 +28,6 @@ export async function cleanupDuplicateSessions(studentId) {
   }
 }
 
-export async function removeCompletedSessions() {
-  try {
-    // Find sessions where attempt is completed
-    const completedSessions = await prisma.activeTestSession.findMany({
-      where: {
-        attempt: {
-          completedAt: { not: null }
-        }
-      },
-      select: { id: true, attemptId: true }
-    })
-
-    if (completedSessions.length === 0) {
-      return 0
-    }
-
-    const sessionIds = completedSessions.map(s => s.id)
-    const attemptIds = completedSessions.map(s => s.attemptId)
-    await prisma.$transaction([
-      prisma.temporaryAnswer.deleteMany({ where: { attemptId: { in: attemptIds } } }),
-      prisma.activeTestSession.deleteMany({ where: { id: { in: sessionIds } } })
-    ])
-
-    return sessionIds.length
-  } catch (error) {
-    console.error('Error cleaning completed sessions:', error)
-    return 0
-  }
-}
-
 export async function removeExpiredSessions() {
   try {
     const expired = await prisma.activeTestSession.findMany({

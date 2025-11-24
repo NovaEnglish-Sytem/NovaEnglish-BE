@@ -7,9 +7,10 @@ import { updateRecordAverageScore } from './scoring.js'
  * Auto-submit expired sessions when student returns
  * Grades temporary answers and finalizes attempts
  * @param {string} studentId - Student user ID
- * @returns {Promise<{submittedCount: number}>}
+ * @param {string} [source] - Optional source label for logging (e.g. 'login', 'dashboard', 'active-session')
+ * @returns {Promise<{submittedCount: number, finalizedAttemptIds: string[]}>}
  */
-export async function autoSubmitExpiredSessions(studentId) {
+export async function autoSubmitExpiredSessions(studentId, source = 'unknown') {
   const now = new Date()
   
   // Find all expired sessions for this student with incomplete attempts

@@ -44,8 +44,8 @@ export async function POST(request) {
         } catch (e) {
           console.error('Failed to auto-submit expired session on start:', e)
           // Fallback: cleanup without grading
-          await prisma.activeTestSession.deleteMany({ where: { studentId } })
-          await prisma.temporaryAnswer.deleteMany({ where: { attemptId: session.attemptId } })
+          // await prisma.activeTestSession.deleteMany({ where: { studentId } })
+          // await prisma.temporaryAnswer.deleteMany({ where: { attemptId: session.attemptId } })
         }
       } else {
         // Check if attempt is actually incomplete

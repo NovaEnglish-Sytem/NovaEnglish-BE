@@ -6,7 +6,6 @@ import { verifyPassword } from '../../../../src/utils/password.js'
 import { signJwt, createAuthCookie, createRefreshCookie } from '../../../../src/lib/auth.js'
 import { generateTokenPair } from '../../../../src/utils/tokens.js'
 import { rateLimit } from '../../../../src/middleware/rate-limit.js'
-import { autoSubmitExpiredSessions } from '../../../../src/utils/auto-submit.js'
 
 const LoginSchema = z.object({
   email: z.string().email().max(254),
@@ -71,31 +70,8 @@ export async function POST(request) {
       )
     }
 
-    // Auto-submit expired sessions for students
-    let autoSubmitted = { submittedCount: 0, finalizedAttemptIds: [] }
-    if (user.role === 'STUDENT') {
-      try {
-        autoSubmitted = await autoSubmitExpiredSessions(user.id)
-      } catch (e) {
-        console.error('Failed to auto-submit expired sessions:', e)
-        // Continue with login even if auto-submit fails
-      }
-    }
-
     // Get current timestamp for session tracking
     const loginTimestamp = Date.now()
-
-    // Cleanup completed sessions
-    const completedSessions = await prisma.activeTestSession.findMany({
-      where: {
-        studentId: user.id,
-        attempt: { completedAt: { not: null } }
-      },
-      select: { id: true, attemptId: true }
-    })
-
-    const cleanupAttemptIds = completedSessions.map(s => s.attemptId)
-    const cleanupSessionIds = completedSessions.map(s => s.id)
 
     // Enforce single device login: invalidate sessions/tokens
     await prisma.$transaction([
@@ -113,11 +89,6 @@ export async function POST(request) {
       prisma.refreshToken.deleteMany({
         where: { userId: user.id, expiresAt: { lt: new Date() } },
       }),
-      ...(user.role === 'STUDENT' ? [
-        // Cleanup completed sessions only (expired sessions already auto-submitted)
-        prisma.temporaryAnswer.deleteMany({ where: { attemptId: { in: cleanupAttemptIds } } }),
-        prisma.activeTestSession.deleteMany({ where: { id: { in: cleanupSessionIds } } }),
-      ] : []),
     ])
 
     // Access JWT with lastLoginAt for session validation (3 hours)
@@ -143,36 +114,9 @@ export async function POST(request) {
       isEmailVerified: user.isEmailVerified,
     }
 
-    // Check for active test session (for students only)
-    let activeSession = null
-    if (user.role === 'STUDENT') {
-      const session = await prisma.activeTestSession.findFirst({
-        where: {
-          studentId: user.id,
-          expiresAt: { gt: new Date() },
-          attempt: {
-            completedAt: null
-          }
-        },
-        select: {
-          attemptId: true,
-          categoryName: true,
-          expiresAt: true
-        },
-        orderBy: {
-          lastActivity: 'desc'
-        }
-      })
-      
-      if (session) {
-        activeSession = {
-          attemptId: session.attemptId,
-          categoryName: session.categoryName,
-          expiresAt: session.expiresAt,
-          isExpired: false
-        }
-      }
-    }
+    // Keep response shape stable for frontend
+    const activeSession = null
+    const autoSubmitted = { submittedCount: 0, finalizedAttemptIds: [] }
 
     return json(
       { ok: true, user: publicUser, activeSession, autoSubmitted },

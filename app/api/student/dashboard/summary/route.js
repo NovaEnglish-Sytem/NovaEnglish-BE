@@ -1,6 +1,7 @@
 import prisma from '../../../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../../../src/utils/http.js'
-import { removeExpiredSessions, removeCompletedSessions, ensureSingleActiveSession } from '../../../../../src/utils/session-cleanup.js'
+import { ensureSingleActiveSession } from '../../../../../src/utils/session-cleanup.js'
+import { autoSubmitExpiredSessions } from '../../../../../src/utils/auto-submit.js'
 import { requireAuthAndSession } from '../../../../../src/middleware/require-auth.js'
 import { getBandScoreFromPercentage } from '../../../../../src/utils/scoring.js'
 
@@ -13,11 +14,14 @@ export async function GET(request) {
 
     const studentId = String(payload.sub)
     
-    // Deterministic: hapus sesi expired sebelum menghitung activeSession
-    try { await removeExpiredSessions() } catch (e) { /* non-fatal */ }
-    // Sisanya non-blocking agar dashboard ringan
+    // Auto-submit expired sessions for this student (with grading)
+    try {
+      await autoSubmitExpiredSessions(studentId, 'dashboard')
+    } catch (e) {}
+
+    // Cleanup is non-blocking to keep dashboard fast
     Promise.all([
-      removeCompletedSessions(),
+      // removeCompletedSessions(),
       ensureSingleActiveSession(studentId)
     ]).catch(() => {})
 

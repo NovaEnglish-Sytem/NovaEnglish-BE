@@ -1,6 +1,7 @@
 import prisma from '../../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../../src/utils/http.js'
 import { requireAuthAndSession } from '../../../../src/middleware/require-auth.js'
+import { autoSubmitExpiredSessions } from '../../../../src/utils/auto-submit.js'
 
 export async function GET(request) {
   try {
@@ -9,6 +10,11 @@ export async function GET(request) {
     const { payload } = auth
 
     const studentId = String(payload.sub)
+
+    // Auto-submit expired sessions when opening test records
+    try {
+      await autoSubmitExpiredSessions(studentId, 'test-records')
+    } catch (e) {}
 
     const { searchParams } = new URL(request.url)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
