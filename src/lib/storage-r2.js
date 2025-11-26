@@ -26,16 +26,22 @@ export function getR2PublicUrl(storageKey) {
   return `${base}/${encodeURIComponent(storageKey)}`
 }
 
-export async function saveR2Stream(readable, originalName) {
+export async function saveR2Stream(readable, originalName, contentLength) {
   const ext = (originalName || '').split('.').pop() || 'bin'
   const key = `${Date.now()}_${Math.random().toString(16).slice(2, 10)}.${ext}`
   const body = ensureReadable(readable)
 
-  await client.send(new PutObjectCommand({
+  const putParams = {
     Bucket: env.r2Bucket,
     Key: key,
     Body: body,
-  }))
+  }
+
+  if (typeof contentLength === 'number' && Number.isFinite(contentLength) && contentLength >= 0) {
+    putParams.ContentLength = contentLength
+  }
+
+  await client.send(new PutObjectCommand(putParams))
 
   const publicUrl = getR2PublicUrl(key)
   return { storageKey: key, publicUrl }

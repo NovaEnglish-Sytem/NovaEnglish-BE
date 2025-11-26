@@ -262,9 +262,9 @@ model TestRecord {
 
 // TestAttempt: Single package attempt with snapshot data
 model TestAttempt {
-  id              String          @id @default(uuid())
-  packageId       String
-  package         QuestionPackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  id              String           @id @default(uuid())
+  packageId       String?
+  package         QuestionPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
   studentId       String
   student         User            @relation(fields: [studentId], references: [id], onDelete: Cascade)
   recordId        String?         // Link to TestRecord for multi-category tests

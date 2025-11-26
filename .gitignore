@@ -71,10 +71,6 @@ nul
 .LSOverride
 ._*
 
-# Media uploads
-uploads/**
-!uploads/.gitkeep
-
 # Temporary files
 *.tmp
 *.temp

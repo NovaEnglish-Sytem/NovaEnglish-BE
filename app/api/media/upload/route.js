@@ -1,6 +1,5 @@
 import prisma from '../../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../../src/utils/http.js'
-import { isLocal, saveLocalStream, getLocalPublicUrl } from '../../../../src/lib/storage.js'
 import { saveR2Stream, deleteR2Object } from '../../../../src/lib/storage-r2.js'
 import { requireAuth } from '../../../../src/middleware/require-auth.js'
 import { env } from '../../../../src/lib/env.js'
@@ -68,18 +67,9 @@ export async function POST(request) {
     }
 
     const stream = file.stream()
-    let storageKey
-    let publicUrl
-
-    if (isLocal()) {
-      const saved = await saveLocalStream(stream, file.name)
-      storageKey = saved.storageKey
-      publicUrl = getLocalPublicUrl(storageKey)
-    } else {
-      const saved = await saveR2Stream(stream, file.name)
-      storageKey = saved.storageKey
-      publicUrl = saved.publicUrl
-    }
+    const saved = await saveR2Stream(stream, file.name, size)
+    const storageKey = saved.storageKey
+    const publicUrl = saved.publicUrl
     const mediaType = isImage ? 'IMAGE' : 'AUDIO'
 
     // Replace existing asset (same owner + type)
@@ -89,15 +79,8 @@ export async function POST(request) {
     // DELETE old asset FIRST to avoid unique constraint violation
     if (old) {
       await prisma.mediaAsset.delete({ where: { id: old.id } })
-      // Delete old file (best effort)
       try {
-        if (isLocal()) {
-          const { join } = await import('path')
-          const { unlink } = await import('fs/promises')
-          await unlink(join(process.cwd(), 'uploads', old.storageKey))
-        } else {
-          await deleteR2Object(old.storageKey)
-        }
+        await deleteR2Object(old.storageKey)
       } catch {}
     }
 
@@ -113,15 +96,8 @@ export async function POST(request) {
         }
       })
     } catch (e) {
-      // Rollback file if DB create failed
       try {
-        if (isLocal()) {
-          const { join } = await import('path')
-          const { unlink } = await import('fs/promises')
-          await unlink(join(process.cwd(), 'uploads', storageKey))
-        } else {
-          await deleteR2Object(storageKey)
-        }
+        await deleteR2Object(storageKey)
       } catch {}
       throw e
     }
