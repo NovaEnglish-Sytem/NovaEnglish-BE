@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "bash start_safe.sh",
+    "start": "next start -p ${PORT:-3001}",
     "deploy": "npm run prisma:generate && npm run prisma:deploy && npm run build",
     "postinstall": "npm run deploy",
     "prisma:generate": "prisma generate",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
+    "@aws-sdk/client-s3": "^3.637.0",
     "bcryptjs": "^3.0.2",
     "jsonwebtoken": "^9.0.2",
     "next": "^15.0.0",

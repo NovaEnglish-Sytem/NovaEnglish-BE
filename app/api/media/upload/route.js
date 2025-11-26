@@ -1,6 +1,7 @@
 import prisma from '../../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../../src/utils/http.js'
 import { isLocal, saveLocalStream, getLocalPublicUrl } from '../../../../src/lib/storage.js'
+import { saveR2Stream, deleteR2Object } from '../../../../src/lib/storage-r2.js'
 import { requireAuth } from '../../../../src/middleware/require-auth.js'
 import { env } from '../../../../src/lib/env.js'
 
@@ -57,10 +58,6 @@ export async function POST(request) {
     if (isImage && size > maxImage) return sendError(`Image too large (max ${env.mediaMaxImageMb}MB)`, 413)
     if (isAudio && size > maxAudio) return sendError(`Audio too large (max ${env.mediaMaxAudioMb}MB)`, 413)
 
-    if (!isLocal()) {
-      return sendError('Local storage only in DEV. Configure reverse-proxy for PROD.', 400)
-    }
-
     // Verify target exists BEFORE any file write to avoid orphan files
     if (scope === 'page') {
       const exists = await prisma.questionPage.findFirst({ where: { id: targetId }, select: { id: true } })
@@ -71,8 +68,18 @@ export async function POST(request) {
     }
 
     const stream = file.stream()
-    const { storageKey } = await saveLocalStream(stream, file.name)
-    const publicUrl = getLocalPublicUrl(storageKey)
+    let storageKey
+    let publicUrl
+
+    if (isLocal()) {
+      const saved = await saveLocalStream(stream, file.name)
+      storageKey = saved.storageKey
+      publicUrl = getLocalPublicUrl(storageKey)
+    } else {
+      const saved = await saveR2Stream(stream, file.name)
+      storageKey = saved.storageKey
+      publicUrl = saved.publicUrl
+    }
     const mediaType = isImage ? 'IMAGE' : 'AUDIO'
 
     // Replace existing asset (same owner + type)
@@ -84,9 +91,13 @@ export async function POST(request) {
       await prisma.mediaAsset.delete({ where: { id: old.id } })
       // Delete old file (best effort)
       try {
-        const { join } = await import('path')
-        const { unlink } = await import('fs/promises')
-        await unlink(join(process.cwd(), 'uploads', old.storageKey))
+        if (isLocal()) {
+          const { join } = await import('path')
+          const { unlink } = await import('fs/promises')
+          await unlink(join(process.cwd(), 'uploads', old.storageKey))
+        } else {
+          await deleteR2Object(old.storageKey)
+        }
       } catch {}
     }
 
@@ -104,9 +115,13 @@ export async function POST(request) {
     } catch (e) {
       // Rollback file if DB create failed
       try {
-        const { join } = await import('path')
-        const { unlink } = await import('fs/promises')
-        await unlink(join(process.cwd(), 'uploads', storageKey))
+        if (isLocal()) {
+          const { join } = await import('path')
+          const { unlink } = await import('fs/promises')
+          await unlink(join(process.cwd(), 'uploads', storageKey))
+        } else {
+          await deleteR2Object(storageKey)
+        }
       } catch {}
       throw e
     }

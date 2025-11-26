@@ -93,6 +93,12 @@ export const env = {
   mediaAllowedImageTypes: get('MEDIA_ALLOWED_IMAGE_TYPES', 'image/jpeg,image/png,image/webp,image/gif'),
   mediaAllowedAudioTypes: get('MEDIA_ALLOWED_AUDIO_TYPES', 'audio/mpeg,audio/wav,audio/ogg'),
 
+  r2Endpoint: get('R2_ENDPOINT', ''),
+  r2Bucket: get('R2_BUCKET_NAME', ''),
+  r2AccessKeyId: get('R2_ACCESS_KEY_ID', ''),
+  r2SecretAccessKey: get('R2_SECRET_ACCESS_KEY', ''),
+  r2PublicBaseUrl: get('R2_PUBLIC_BASE_URL', ''),
+
   // Automated cleanup
   cronSecret: get('CRON_SECRET', ''),
   // User cleanup

@@ -1,6 +1,8 @@
 import prisma from '../../../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../../../src/utils/http.js'
 import { requireAuth } from '../../../../../src/middleware/require-auth.js'
+import { isLocal } from '../../../../../src/lib/storage.js'
+import { deleteR2Object } from '../../../../../src/lib/storage-r2.js'
 import { join } from 'path'
 import { unlink } from 'fs/promises'
 
@@ -210,7 +212,11 @@ export async function DELETE(request, { params }) {
       for (const m of mediaAssets) {
         if (!m?.storageKey) continue
         try {
-          await unlink(join(process.cwd(), 'uploads', m.storageKey))
+          if (isLocal()) {
+            await unlink(join(process.cwd(), 'uploads', m.storageKey))
+          } else {
+            await deleteR2Object(m.storageKey)
+          }
         } catch (e) {
           console.warn('Could not delete file during category cascade:', m.storageKey, e.message)
         }

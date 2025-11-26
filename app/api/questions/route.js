@@ -1,6 +1,8 @@
 import { requireAuth } from '../../../src/middleware/require-auth.js'
 import prisma from '../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../src/utils/http.js'
+import { isLocal } from '../../../src/lib/storage.js'
+import { deleteR2Object } from '../../../src/lib/storage-r2.js'
 import { join } from 'path'
 import { unlink } from 'fs/promises'
 import { transformQuestionsToDraft, computeContentHash } from '../../../src/utils/questionTransformers.js'
@@ -292,7 +294,11 @@ export async function POST(request) {
     // Best-effort unlink
     for (const key of toDelete) {
       try {
-        await unlink(join(process.cwd(), 'uploads', key))
+        if (isLocal()) {
+          await unlink(join(process.cwd(), 'uploads', key))
+        } else {
+          await deleteR2Object(key)
+        }
       } catch (e) {
         console.warn('Could not delete removed media file:', key, e.message)
       }

@@ -1,6 +1,8 @@
 import prisma from '../../../../src/lib/prisma.js'
 import { sendError, sendSuccess } from '../../../../src/utils/http.js'
 import { requireAuth } from '../../../../src/middleware/require-auth.js'
+import { isLocal } from '../../../../src/lib/storage.js'
+import { deleteR2Object } from '../../../../src/lib/storage-r2.js'
 import { join } from 'path'
 import { unlink } from 'fs/promises'
 
@@ -50,8 +52,12 @@ export async function DELETE(request, { params }) {
 
     // Delete physical file (best effort)
     try {
-      const filePath = join(process.cwd(), 'uploads', asset.storageKey)
-      await unlink(filePath)
+      if (isLocal()) {
+        const filePath = join(process.cwd(), 'uploads', asset.storageKey)
+        await unlink(filePath)
+      } else {
+        await deleteR2Object(asset.storageKey)
+      }
     } catch (e) {
       // Ignore file deletion errors (file may not exist)
       console.warn('Could not delete file:', asset.storageKey, e.message)

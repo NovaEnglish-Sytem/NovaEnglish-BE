@@ -1,6 +1,7 @@
 import { readdir, unlink } from 'fs/promises'
 import { join } from 'path'
 import prisma from '../src/lib/prisma.js'
+import { isLocal } from '../src/lib/storage.js'
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads')
 
@@ -20,6 +21,12 @@ async function listFiles(dir) {
 
 async function main() {
   console.log('[cleanup] Start scan', new Date().toISOString())
+
+  if (!isLocal()) {
+    console.log('[cleanup] STORAGE_DRIVER is not local, nothing to cleanup in uploads/ directory')
+    await prisma.$disconnect()
+    return
+  }
   const files = await listFiles(UPLOAD_DIR)
   console.log(`[cleanup] Files in uploads/: ${files.length}`)
   const assets = await prisma.mediaAsset.findMany({ select: { storageKey: true } })
