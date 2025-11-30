@@ -52,7 +52,7 @@ export async function sendVerificationEmail({ to, verifyUrl, appName = 'Nova Eng
   const durationText = expiryMinutes >= 1440
     ? `${expiryMinutes / 1440} day${expiryMinutes / 1440 > 1 ? 's' : ''}`
     : `${expiryMinutes} minute${expiryMinutes > 1 ? 's' : ''}`
-  const footerText = `This link is valid for ${durationText}.`
+  const footerText = `This link is valid for ${durationText}. If you do not see this email in your inbox, please check your spam or junk folder.`
   const year = new Date().getFullYear()
   const preheaderText = `Verify your ${appName} account to start your English test.`
   const html = await renderTemplate('verifyEmail.html', {
