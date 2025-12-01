@@ -9,7 +9,7 @@ import { unlink } from 'fs/promises'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function DELETE(request, { params }) {
+export async function DELETE(request, context) {
   try {
     const auth = await requireAuth(request)
     if (!auth.ok) return sendError(auth.error, auth.status, { code: auth.code })
@@ -21,7 +21,7 @@ export async function DELETE(request, { params }) {
       return sendError('Access denied. Tutor role required.', 403)
     }
 
-    const { id } = params
+    const { id } = await context.params
     const idStr = String(id)
     
     // Support two formats:

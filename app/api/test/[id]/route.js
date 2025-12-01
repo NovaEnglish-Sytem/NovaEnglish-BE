@@ -139,13 +139,21 @@ export async function GET(request, { params }) {
         }
       }
 
-      // Resolve media from mediaAssets (prefer AUDIO if present)
+      // Resolve media from mediaAssets
       let mediaUrl = null
       let mediaType = null
+      let imageUrl = null
+      let audioUrl = null
       try {
         const assets = Array.isArray(item.mediaAssets) ? item.mediaAssets : []
         const audio = assets.find(a => String(a.type).toUpperCase() === 'AUDIO')
         const image = assets.find(a => String(a.type).toUpperCase() === 'IMAGE')
+
+        // Expose both media types independently
+        imageUrl = image?.url || null
+        audioUrl = audio?.url || null
+
+        // Backward-compatible single mediaUrl/mediaType (prefer AUDIO when present)
         const chosen = audio || image || null
         mediaUrl = chosen?.url || null
         mediaType = chosen?.type || null
@@ -159,6 +167,10 @@ export async function GET(request, { params }) {
         choices,
         mediaUrl,
         mediaType,
+        media: {
+          imageUrl,
+          audioUrl,
+        },
       }
 
       if (item.type === 'SHORT_ANSWER') {
