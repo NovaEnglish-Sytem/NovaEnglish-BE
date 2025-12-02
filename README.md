@@ -322,6 +322,7 @@ fetch(url, {
 - `POST /api/auth/cleanup-unverified` - Cleanup unverified users
 - `POST /api/auth/cleanup-verification-tokens` - Cleanup expired verification tokens
 - `POST /api/auth/cleanup-reset-tokens` - Cleanup expired reset tokens
+- `POST /api/cron/cleanup-results` - Cleanup historical test records and attempts beyond retention window
 
 ### Example Request
 

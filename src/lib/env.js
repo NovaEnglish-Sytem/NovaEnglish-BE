@@ -119,6 +119,9 @@ export const env = {
   get cleanupRetentionDays() {
     return toInt(get('CLEANUP_RETENTION_DAYS')) || this.testDataCleanupDays
   },
+  // Historical test result cleanup (TestRecord + TestAttempt)
+  // Retention in months, used by /api/cron/cleanup-results
+  testResultRetentionMonths: toInt(get('TEST_RESULT_RETENTION_MONTHS'), 12),
 };
 
 export const envHelpers = {
