@@ -20,19 +20,19 @@
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.18.0",
     "@aws-sdk/client-s3": "^3.637.0",
+    "@prisma/client": "^5.18.0",
     "bcryptjs": "^3.0.2",
     "jsonwebtoken": "^9.0.2",
-    "next": "^15.0.0",
-    "nodemailer": "^6.9.14",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "zod": "^3.23.8",
-    "prisma": "^5.18.0"
+    "next": "^16.0.7",
+    "nodemailer": "^7.0.11",
+    "prisma": "^5.18.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "pm2": "^5.4.3"
+    "pm2": "^6.0.14"
   },
   "engines": {
     "node": ">=18.18.0"

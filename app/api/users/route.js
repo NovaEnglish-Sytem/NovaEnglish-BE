@@ -129,11 +129,65 @@ export async function POST(request) {
     if (existing) return conflict('Email is already registered')
 
     const passwordHash = await hashPassword(password)
+    const normalizedEmail = email.toLowerCase()
 
-    // Create user
+    // If admin wants to send verification email for an unverified user,
+    // send email first and only then persist user + verification token.
+    if (!isEmailVerified && shouldSend) {
+      const { token, tokenHash } = generateTokenPair(32)
+      const expiresAt = new Date(Date.now() + envHelpers.getVerificationTtlMs())
+      const verifyUrl = `${env.appUrl}/account/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(normalizedEmail)}`
+
+      try {
+        await sendVerificationEmail({ to: normalizedEmail, verifyUrl })
+      } catch (e) {
+        if (env.isProd) {
+          console.error('Failed to send verification email:', e?.message || e)
+        }
+        return serverError('Failed to send verification email. Please try again later.')
+      }
+
+      const user = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            passwordHash,
+            fullName,
+            phoneE164: phoneE164 ?? null,
+            role: role ?? 'STUDENT',
+            isEmailVerified: false,
+            placeOfBirth: placeOfBirth ?? null,
+            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+            gender: gender ?? null,
+          },
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phoneE164: true,
+            role: true,
+            isEmailVerified: true,
+            placeOfBirth: true,
+            dateOfBirth: true,
+            gender: true,
+            createdAt: true,
+          },
+        })
+
+        await tx.verificationToken.create({
+          data: { userId: created.id, tokenHash, expiresAt },
+        })
+
+        return created
+      })
+
+      return json({ ok: true, user }, 201)
+    }
+
+    // No verification email requested or user already marked verified: create user directly
     const user = await prisma.user.create({
       data: {
-        email: email.toLowerCase(),
+        email: normalizedEmail,
         passwordHash,
         fullName,
         phoneE164: phoneE164 ?? null,
@@ -156,25 +210,6 @@ export async function POST(request) {
         createdAt: true,
       },
     })
-
-    // Send verification email if needed
-    if (!user.isEmailVerified && shouldSend) {
-      const { token, tokenHash } = generateTokenPair(32)
-      const expiresAt = new Date(Date.now() + envHelpers.getVerificationTtlMs())
-
-      await prisma.verificationToken.create({
-        data: { userId: user.id, tokenHash, expiresAt },
-      })
-
-      try {
-        const verifyUrl = `${env.appUrl}/account/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(user.email)}`
-        await sendVerificationEmail({ to: user.email, verifyUrl })
-      } catch (e) {
-        if (env.isProd) {
-          console.error('Failed to send verification email:', e?.message || e)
-        }
-      }
-    }
 
     return json({ ok: true, user }, 201)
   } catch (err) {

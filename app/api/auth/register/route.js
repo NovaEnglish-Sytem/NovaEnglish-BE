@@ -68,47 +68,44 @@ export async function POST(request) {
 
     const passwordHash = await hashPassword(password)
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        passwordHash,
-        fullName: String(fullName || '').split(/\s+/).map(w => w ? (w[0].toUpperCase() + w.slice(1).toLowerCase()) : '').join(' ').trim(),
-        phoneE164: phoneE164 ?? null,
-        role: role ?? 'STUDENT',
-        isEmailVerified: false,
-        placeOfBirth: placeOfBirth ? String(placeOfBirth).split(/\s+/).map(w => w ? (w[0].toUpperCase() + w.slice(1).toLowerCase()) : '').join(' ').trim() : null,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        gender: gender,
-      },
-      select: { id: true, email: true },
-    })
-
-    // Create verification token
     const { token, tokenHash } = generateTokenPair(32)
     const expiresAt = new Date(Date.now() + envHelpers.getVerificationTtlMs())
+    const normalizedEmail = email.toLowerCase()
+    const verifyUrl = `${env.appUrl}/account/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(normalizedEmail)}`
 
-    await prisma.verificationToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
-    })
-
-    // Email link
-    const verifyUrl = `${env.appUrl}/account/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(user.email)}`
-
-    // Send email (best-effort)
     try {
-      await sendVerificationEmail({ to: user.email, verifyUrl })
+      await sendVerificationEmail({ to: normalizedEmail, verifyUrl })
     } catch (e) {
-      // Do not fail registration on email transport error in dev environments
       if (env.isProd) {
-        // In production, you might choose to fail. Here we log and continue.
         console.error('Failed to send verification email:', e?.message || e)
       }
+      return serverError('Failed to send verification email. Please try again later.')
     }
+
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash,
+          fullName: String(fullName || '').split(/\s+/).map(w => w ? (w[0].toUpperCase() + w.slice(1).toLowerCase()) : '').join(' ').trim(),
+          phoneE164: phoneE164 ?? null,
+          role: role ?? 'STUDENT',
+          isEmailVerified: false,
+          placeOfBirth: placeOfBirth ? String(placeOfBirth).split(/\s+/).map(w => w ? (w[0].toUpperCase() + w.slice(1).toLowerCase()) : '').join(' ').trim() : null,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          gender: gender,
+        },
+        select: { id: true },
+      })
+
+      await tx.verificationToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        },
+      })
+    })
 
     return created({
       message: 'Registration successful. Please check your email to verify your account.',

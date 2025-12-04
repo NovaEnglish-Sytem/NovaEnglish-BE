@@ -22,7 +22,9 @@ export function getTransporter() {
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const TEMPLATES_DIR = path.resolve(__dirname, '..', 'emails')
+// NOTE: When bundled by Next.js, __dirname may not point to the original src folder.
+// Use process.cwd() (project root) and resolve to src/emails so paths are stable.
+const TEMPLATES_DIR = path.resolve(process.cwd(), 'src', 'emails')
 
 export async function renderTemplate(templateFile, variables = {}) {
   const filePath = path.join(TEMPLATES_DIR, templateFile)
@@ -37,14 +39,18 @@ export async function renderTemplate(templateFile, variables = {}) {
 
 export async function sendEmail({ to, subject, html, text }) {
   const tx = getTransporter()
-  const info = await tx.sendMail({
-    from: env.smtp.from,
-    to,
-    subject,
-    html,
-    text,
-  })
-  return info
+  try {
+    const info = await tx.sendMail({
+      from: env.smtp.from,
+      to,
+      subject,
+      html,
+      text,
+    })
+    return info
+  } catch (err) {
+    throw err
+  }
 }
 
 export async function sendVerificationEmail({ to, verifyUrl, appName = 'Nova English' }) {
@@ -52,7 +58,7 @@ export async function sendVerificationEmail({ to, verifyUrl, appName = 'Nova Eng
   const durationText = expiryMinutes >= 1440
     ? `${expiryMinutes / 1440} day${expiryMinutes / 1440 > 1 ? 's' : ''}`
     : `${expiryMinutes} minute${expiryMinutes > 1 ? 's' : ''}`
-  const footerText = `This link is valid for ${durationText}. If you do not see this email in your inbox, please check your spam or junk folder.`
+  const footerText = `This verification link will expire in ${durationText}.`
   const year = new Date().getFullYear()
   const preheaderText = `Verify your ${appName} account to start your English test.`
   const html = await renderTemplate('verifyEmail.html', {
