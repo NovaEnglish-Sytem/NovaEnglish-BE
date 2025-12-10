@@ -64,11 +64,45 @@ export async function GET(request) {
     // Compute per-student stats using completed attempts and TestRecord aggregates
     const studentsWithStats = await Promise.all(students.map(async (student) => {
       const attempts = student.testAttempts || []
-      // Aggregations from TestRecord
-      const [totalAttempts, bestAvgAgg] = await Promise.all([
-        prisma.testRecord.count({ where: { studentId: student.id, averageScore: { not: null } } }),
-        prisma.testRecord.aggregate({ where: { studentId: student.id }, _max: { averageScore: true } })
-      ])
+
+      // Load all TestRecords with averages for this student, including attempts to derive category counts
+      const records = await prisma.testRecord.findMany({
+        where: { studentId: student.id, averageScore: { not: null } },
+        select: {
+          id: true,
+          averageScore: true,
+          createdAt: true,
+          attempts: {
+            where: { completedAt: { not: null }, categoryName: { not: null } },
+            select: { categoryName: true },
+          },
+        },
+      })
+
+      const totalAttempts = records.length
+
+      // Pick best TestRecord: higher averageScore, and if tie, more categories; if still tie, latest createdAt
+      let bestAvg = 0
+      let bestCategoryCount = -1
+      let bestCreatedAt = null
+
+      for (const rec of records) {
+        const avg = typeof rec.averageScore === 'number' ? rec.averageScore : 0
+        const categoryCount = new Set((rec.attempts || []).map(a => a.categoryName).filter(Boolean)).size
+        const createdAt = rec.createdAt || new Date(0)
+
+        const isBetter = (
+          avg > bestAvg ||
+          (avg === bestAvg && categoryCount > bestCategoryCount) ||
+          (avg === bestAvg && categoryCount === bestCategoryCount && (!bestCreatedAt || createdAt > bestCreatedAt))
+        )
+
+        if (isBetter) {
+          bestAvg = avg
+          bestCategoryCount = categoryCount
+          bestCreatedAt = createdAt
+        }
+      }
 
       // Latest completed attempt timestamp for lastUpdate
       let lastUpdate = null
@@ -78,16 +112,13 @@ export async function GET(request) {
         }
       }
 
-      // Best average score across TestRecords
-      const bestAvg = Number(bestAvgAgg?._max?.averageScore ?? 0)
-
       return {
         id: student.id,
         fullName: student.fullName,
         email: student.email,
         bestAverageScore: bestAvg > 0 ? bestAvg : null,
         totalAttempts,
-        lastUpdate
+        lastUpdate,
       }
     }))
 

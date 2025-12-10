@@ -3,7 +3,6 @@ import { sendError, sendSuccess } from '../../../../../src/utils/http.js'
 import { ensureSingleActiveSession } from '../../../../../src/utils/session-cleanup.js'
 import { autoSubmitExpiredSessions } from '../../../../../src/utils/auto-submit.js'
 import { requireAuthAndSession } from '../../../../../src/middleware/require-auth.js'
-import { getBandScoreFromPercentage } from '../../../../../src/utils/scoring.js'
 
 // GET /api/student/dashboard/summary
 export async function GET(request) {
@@ -45,16 +44,12 @@ export async function GET(request) {
       }
     })
 
-    const recent = await Promise.all(recentAttempts.map(async (a) => {
-      const bandScore = await getBandScoreFromPercentage(a.totalScore)
-      return {
-        id: a.id,
-        completedAt: a.completedAt,
-        totalScore: Math.round(a.totalScore * 100) / 100,
-        bandScore,
-        packageTitle: a.packageTitle || 'Unknown',
-        categoryName: a.categoryName || 'Unknown'
-      }
+    const recent = recentAttempts.map((a) => ({
+      id: a.id,
+      completedAt: a.completedAt,
+      totalScore: Math.round(a.totalScore * 100) / 100,
+      packageTitle: a.packageTitle || 'Unknown',
+      categoryName: a.categoryName || 'Unknown'
     }))
 
     // Best score per category for this student (using snapshot categoryName)

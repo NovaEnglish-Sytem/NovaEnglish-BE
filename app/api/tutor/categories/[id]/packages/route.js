@@ -60,7 +60,8 @@ export async function POST(request, { params }) {
       return sendError('Access denied. Tutor role required.', 403)
     }
 
-    const { id: categoryId } = params
+    const resolvedParams = await params
+    const { id: categoryId } = resolvedParams
     // No request body used for this endpoint
 
     // Check if category exists

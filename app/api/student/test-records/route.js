@@ -115,10 +115,10 @@ export async function GET(request) {
       }
     })
 
-    // Best score - find TestRecord with highest average score
+    // Best score - pick TestRecord by highest averageScore, then most categories, then newest createdAt
     let bestScore = null
     if (page === 1) {
-      const bestRecord = await prisma.testRecord.findFirst({
+      const candidateRecords = await prisma.testRecord.findMany({
         where: {
           studentId,
           attempts: {
@@ -126,7 +126,6 @@ export async function GET(request) {
           },
           averageScore: { not: null }
         },
-        orderBy: { averageScore: 'desc' },
         include: {
           attempts: {
             where: { completedAt: { not: null } },
@@ -137,9 +136,33 @@ export async function GET(request) {
               completedAt: true
             }
           }
-        }
+        },
+        orderBy: { createdAt: 'asc' }
       })
-      
+
+      let bestRecord = null
+      let bestAvg = 0
+      let bestCategoryCount = -1
+      let bestCreatedAt = null
+
+      for (const rec of candidateRecords) {
+        const avg = typeof rec.averageScore === 'number' ? rec.averageScore : 0
+        const categoryCount = new Set((rec.attempts || []).map(a => a.categoryName).filter(Boolean)).size
+        const createdAt = rec.createdAt || new Date(0)
+
+        const isBetter =
+          avg > bestAvg ||
+          (avg === bestAvg && categoryCount > bestCategoryCount) ||
+          (avg === bestAvg && categoryCount === bestCategoryCount && (!bestCreatedAt || createdAt > bestCreatedAt))
+
+        if (isBetter) {
+          bestRecord = rec
+          bestAvg = avg
+          bestCategoryCount = categoryCount
+          bestCreatedAt = createdAt
+        }
+      }
+
       if (bestRecord) {
         const categoryScores = {}
         bestRecord.attempts.forEach(attempt => {
@@ -149,15 +172,15 @@ export async function GET(request) {
           }
           categoryScores[catName] += attempt.totalScore || 0
         })
-        
+
         const attemptNumber = recordAttemptNumbers[bestRecord.id] || 1
-        
+
         // Find latest completed date
         const latestDate = bestRecord.attempts.reduce((latest, a) => {
           const date = new Date(a.completedAt)
           return date > latest ? date : latest
         }, new Date(0))
-        
+
         // Build ordered categories for best score as well (name asc)
         const orderedBestCategories = Object.entries(categoryScores)
           .map(([name, score]) => ({ name, score: Math.round(score * 100) / 100 }))
@@ -166,15 +189,15 @@ export async function GET(request) {
         // Latest completed attempt id for best record
         const latestAttemptId = (bestRecord.attempts && bestRecord.attempts.length > 0)
           ? bestRecord.attempts.reduce((latest, a) => {
-              // pick max by completedAt, return its id
-              return (new Date(a.completedAt) > new Date(bestRecord.attempts.find(x => x.id === latest)?.completedAt || 0)) ? a.id : latest
+              const latestCompleted = bestRecord.attempts.find(x => x.id === latest)?.completedAt || 0
+              return (new Date(a.completedAt) > new Date(latestCompleted)) ? a.id : latest
             }, bestRecord.attempts[0].id)
           : null
 
         bestScore = {
           id: bestRecord.id,
           title: `Attempt ${attemptNumber}`,
-          averageScore: Math.round((bestRecord.averageScore || 0) * 100) / 100,
+          averageScore: Math.round((bestAvg || 0) * 100) / 100,
           date: latestDate,
           categories: orderedBestCategories,
           attemptId: latestAttemptId,

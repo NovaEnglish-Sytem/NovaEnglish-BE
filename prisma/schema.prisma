@@ -209,48 +209,16 @@ model QuestionItem {
 }
 
 // ============================================================================
-// BAND SCORE & FEEDBACK
-// ============================================================================
-
-// BandScore: IELTS-like scoring bands (used for on-the-fly conversion in UI)
-model BandScore {
-  id       String   @id @default(uuid())
-  band     String   @unique // "1.0", "1.5", "2.0", ... "9.0"
-  minScore Int      // Percentage min (0-100)
-  maxScore Int      // Percentage max (0-100)
-  order    Int      // Display order
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  feedbacks Feedback[]
-
-  @@index([order])
-  @@index([band])
-}
-
-// Feedback: Tutor feedback per band score
-model Feedback {
-  id          String     @id @default(uuid())
-  bandScoreId String
-  bandScore   BandScore  @relation(fields: [bandScoreId], references: [id], onDelete: Cascade)
-  text        String     @db.Text
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([bandScoreId])
-}
-
-// ============================================================================
 // STUDENT TEST FLOW
 // ============================================================================
 
 // TestRecord: Multi-category test session (e.g., full IELTS test)
 model TestRecord {
-  id           String  @id @default(uuid())
+  id           String   @id @default(uuid())
   studentId    String
-  student      User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  averageScore Float?  // Average score from all attempts (2 decimal places)
+  student      User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  averageScore Float?   // Average score from all attempts (2 decimal places)
+  feedback     String?  @db.Text // Tutor/Admin written feedback for this multi-category test
   createdAt    DateTime @default(now())
 
   // Relations

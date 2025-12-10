@@ -98,6 +98,9 @@ export async function GET(request, context) {
       // Get category scores and latest packageTitle per category (using snapshots on attempt)
       const categoryScores = {}
       const categoryLatest = {}
+      let latestAttemptTime = 0
+      let latestAttemptId = null
+
       record.attempts.forEach(attempt => {
         const catName = attempt.categoryName || 'Uncategorized'
         const completedAt = attempt.completedAt ? new Date(attempt.completedAt).getTime() : 0
@@ -107,6 +110,11 @@ export async function GET(request, context) {
         const prev = categoryLatest[catName]
         if (!prev || completedAt >= prev.completedAt) {
           categoryLatest[catName] = { completedAt, packageTitle: attempt.packageTitle || null }
+        }
+
+        if (completedAt >= latestAttemptTime) {
+          latestAttemptTime = completedAt
+          latestAttemptId = attempt.id
         }
       })
       
@@ -118,6 +126,7 @@ export async function GET(request, context) {
       
       return {
         recordId: record.id,
+        attemptId: latestAttemptId,
         title: `Test ${attemptNumber}`,
         completedAt: latestDate,
         averageScore: Math.round((record.averageScore || 0) * 100) / 100,
@@ -132,14 +141,13 @@ export async function GET(request, context) {
 
     let bestScore = null
 
-    // If first page, get best TestRecord by highest average score
+    // If first page, get best TestRecord by highest average score, then most categories, then newest createdAt
     if (page === 1) {
-      const bestRecord = await prisma.testRecord.findFirst({
+      const candidateRecords = await prisma.testRecord.findMany({
         where: {
           studentId,
           averageScore: { not: null }
         },
-        orderBy: { averageScore: 'desc' },
         include: {
           attempts: {
             where: { completedAt: { not: null } },
@@ -151,12 +159,39 @@ export async function GET(request, context) {
               completedAt: true
             }
           }
-        }
+        },
+        orderBy: { createdAt: 'asc' }
       })
-      
+
+      let bestRecord = null
+      let bestAvg = 0
+      let bestCategoryCount = -1
+      let bestCreatedAt = null
+
+      for (const rec of candidateRecords) {
+        const avg = typeof rec.averageScore === 'number' ? rec.averageScore : 0
+        const categoryCount = new Set((rec.attempts || []).map(a => a.categoryName).filter(Boolean)).size
+        const createdAt = rec.createdAt || new Date(0)
+
+        const isBetter =
+          avg > bestAvg ||
+          (avg === bestAvg && categoryCount > bestCategoryCount) ||
+          (avg === bestAvg && categoryCount === bestCategoryCount && (!bestCreatedAt || createdAt > bestCreatedAt))
+
+        if (isBetter) {
+          bestRecord = rec
+          bestAvg = avg
+          bestCategoryCount = categoryCount
+          bestCreatedAt = createdAt
+        }
+      }
+
       if (bestRecord) {
         const categoryScores = {}
         const categoryLatest = {}
+        let latestAttemptTime = 0
+        let latestAttemptId = null
+
         bestRecord.attempts.forEach(attempt => {
           const catName = attempt.categoryName || 'Uncategorized'
           if (!categoryScores[catName]) categoryScores[catName] = 0
@@ -165,6 +200,11 @@ export async function GET(request, context) {
           const prev = categoryLatest[catName]
           if (!prev || completedAt >= prev.completedAt) {
             categoryLatest[catName] = { completedAt, packageTitle: attempt.packageTitle || null }
+          }
+
+          if (completedAt >= latestAttemptTime) {
+            latestAttemptTime = completedAt
+            latestAttemptId = attempt.id
           }
         })
         
@@ -177,9 +217,10 @@ export async function GET(request, context) {
         
         bestScore = {
           recordId: bestRecord.id,
+          attemptId: latestAttemptId,
           title: `Test ${attemptNumber}`,
           completedAt: latestDate,
-          averageScore: Math.round((bestRecord.averageScore || 0) * 100) / 100,
+          averageScore: Math.round((bestAvg || 0) * 100) / 100,
           attemptsCount: bestRecord.attempts.length,
           categoryScores: Object.entries(categoryScores).map(([categoryName, score]) => ({
             categoryName,
