@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream'
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import { env } from './env.js'
 
 const client = new S3Client({
@@ -55,4 +55,34 @@ export async function deleteR2Object(storageKey) {
       Key: storageKey,
     }))
   } catch (e) {}
+}
+
+export async function listAllR2Keys(maxKeys = 10000) {
+  const keys = []
+  let token
+
+  while (keys.length < maxKeys) {
+    const pageSize = Math.min(1000, maxKeys - keys.length)
+
+    const resp = await client.send(new ListObjectsV2Command({
+      Bucket: env.r2Bucket,
+      ContinuationToken: token,
+      MaxKeys: pageSize,
+    }))
+
+    const contents = resp.Contents || []
+    for (const obj of contents) {
+      if (obj && obj.Key) {
+        keys.push(obj.Key)
+      }
+    }
+
+    if (!resp.IsTruncated || !resp.NextContinuationToken) {
+      break
+    }
+
+    token = resp.NextContinuationToken
+  }
+
+  return keys
 }

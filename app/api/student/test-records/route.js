@@ -115,7 +115,7 @@ export async function GET(request) {
       }
     })
 
-    // Best score - pick TestRecord by highest averageScore, then most categories, then newest createdAt
+    // Best score - pick TestRecord by highest averageScore, then most categories; if both equal, keep oldest record
     let bestScore = null
     if (page === 1) {
       const candidateRecords = await prisma.testRecord.findMany({
@@ -141,25 +141,21 @@ export async function GET(request) {
       })
 
       let bestRecord = null
-      let bestAvg = 0
+      let bestAvg = -Infinity
       let bestCategoryCount = -1
-      let bestCreatedAt = null
 
       for (const rec of candidateRecords) {
         const avg = typeof rec.averageScore === 'number' ? rec.averageScore : 0
         const categoryCount = new Set((rec.attempts || []).map(a => a.categoryName).filter(Boolean)).size
-        const createdAt = rec.createdAt || new Date(0)
 
         const isBetter =
           avg > bestAvg ||
-          (avg === bestAvg && categoryCount > bestCategoryCount) ||
-          (avg === bestAvg && categoryCount === bestCategoryCount && (!bestCreatedAt || createdAt > bestCreatedAt))
+          (avg === bestAvg && categoryCount > bestCategoryCount)
 
         if (isBetter) {
           bestRecord = rec
           bestAvg = avg
           bestCategoryCount = categoryCount
-          bestCreatedAt = createdAt
         }
       }
 

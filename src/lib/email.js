@@ -26,6 +26,8 @@ const __dirname = path.dirname(__filename)
 // Use process.cwd() (project root) and resolve to src/emails so paths are stable.
 const TEMPLATES_DIR = path.resolve(process.cwd(), 'src', 'emails')
 
+const SUPPORT_EMAIL = 'dismasreynara1998@gmail.com'
+
 export async function renderTemplate(templateFile, variables = {}) {
   const filePath = path.join(TEMPLATES_DIR, templateFile)
   let content = await readFile(filePath, 'utf8')
@@ -64,7 +66,7 @@ export async function sendVerificationEmail({ to, verifyUrl, appName = 'Nova Eng
   const html = await renderTemplate('verifyEmail.html', {
     app_name: appName,
     action_url: verifyUrl,
-    support_email: env.smtp.user || 'support@' + env.appDomain,
+    support_email: SUPPORT_EMAIL,
     footer_text: footerText,
     year,
     preheader_text: preheaderText,
@@ -88,7 +90,7 @@ export async function sendPasswordResetEmail({ to, resetUrl, appName = 'Nova Eng
   const html = await renderTemplate('resetPassword.html', {
     app_name: appName,
     action_url: resetUrl,
-    support_email: env.smtp.user || 'support@' + env.appDomain,
+    support_email: SUPPORT_EMAIL,
     footer_text: footerText,
     year,
     preheader_text: preheaderText,
@@ -106,7 +108,7 @@ export async function sendPasswordChangedEmail({ to, appName = 'Nova English' })
   const preheaderText = `Your ${appName} password was changed.`
   const html = await renderTemplate('passwordChanged.html', {
     app_name: appName,
-    support_email: env.smtp.user || 'support@' + env.appDomain,
+    support_email: SUPPORT_EMAIL,
     year,
     preheader_text: preheaderText,
   })

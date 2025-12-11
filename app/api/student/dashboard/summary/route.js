@@ -200,16 +200,46 @@ export async function GET(request) {
       overallBest = Math.round(sum / allRecordsWithAvg.length)
     }
 
-    // Best Band Score (temporary): use best average score (rounded) without band table mapping
-    const bestRecord = await prisma.testRecord.findFirst({
-      where: { studentId, averageScore: { not: null } },
-      orderBy: { averageScore: 'desc' },
-      select: { averageScore: true }
+    // Best Score: pick TestRecord by highest averageScore, then most categories; if both equal, keep oldest record
+    let bestScore = null
+    const candidateBestRecords = await prisma.testRecord.findMany({
+      where: {
+        studentId,
+        attempts: {
+          some: { completedAt: { not: null } }
+        },
+        averageScore: { not: null }
+      },
+      include: {
+        attempts: {
+          where: { completedAt: { not: null } },
+          select: { categoryName: true }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
     })
 
-    let bestBand = null
-    if (bestRecord && typeof bestRecord.averageScore === 'number') {
-      bestBand = Math.round(bestRecord.averageScore)
+    if (candidateBestRecords.length > 0) {
+      let bestAvg = -Infinity
+      let bestCategoryCount = -1
+
+      for (const rec of candidateBestRecords) {
+        const avg = typeof rec.averageScore === 'number' ? rec.averageScore : 0
+        const categoryCount = new Set((rec.attempts || []).map(a => a.categoryName).filter(Boolean)).size
+
+        const isBetter =
+          avg > bestAvg ||
+          (avg === bestAvg && categoryCount > bestCategoryCount)
+
+        if (isBetter) {
+          bestAvg = avg
+          bestCategoryCount = categoryCount
+        }
+      }
+
+      if (isFinite(bestAvg) && bestAvg > -Infinity) {
+        bestScore = Math.round(Number(bestAvg) * 100) / 100
+      }
     }
 
     // Count total test records for this student
@@ -224,7 +254,7 @@ export async function GET(request) {
       categories,
       categoryList: categoryListWithStatus,
       overallBest,
-      bestBand,
+      bestScore,
       recordCount,
       activeRecord: activeRecord ? {
         id: activeRecord.id,

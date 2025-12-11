@@ -32,16 +32,18 @@ export async function GET(request) {
       }
     })
 
-    // 2. Test attempts this month (count TestRecord created within current month)
+    // 2. Test attempts this month (count TestRecord with at least one completed attempt created within current month)
     const testAttemptsCount = await prisma.testRecord.count({
       where: {
         createdAt: { gte: startOfMonth, lt: startOfNextMonth },
-        averageScore: { not: null }
+        attempts: {
+          some: { completedAt: { not: null } }
+        }
       }
     })
 
-    // 3. Most common band score (mode across students' best average scores)
-    const mostCommonBandScore = await computeMostCommonBandScoreFromBestAverages()
+    // 3. Most common best score (mode across students' best scores)
+    const mostCommonScore = await computeMostCommonScoreFromBestAverages()
 
     // 4. Class performance by category
     const classPerformance = await computeClassPerformance()
@@ -56,7 +58,7 @@ export async function GET(request) {
         activeStudentsThisMonth: activeStudentsCount > 0 ? activeStudentsCount : null,
         testAttemptsThisMonth: testAttemptsCount > 0 ? testAttemptsCount : null,
         // Keep the existing field name for UI compatibility
-        mostCommonStudentLevel: mostCommonBandScore,
+        mostCommonStudentLevel: mostCommonScore,
         classPerformance: classPerformance
       }
     })
@@ -67,12 +69,12 @@ export async function GET(request) {
 }
 
 /**
- * Compute most common band score (mode) from each student's best TestRecord.averageScore
+ * Compute most common best score (mode) from each student's best TestRecord.averageScore
  * - Pull max(averageScore) per student
- * - Round to nearest integer for band bucketing (to match shield rounding)
- * - If tie, return the highest value
+ * - Round to nearest integer for score bucketing (to match shield rounding)
+ * - If tie, return the lowest value
  */
-async function computeMostCommonBandScoreFromBestAverages() {
+async function computeMostCommonScoreFromBestAverages() {
   const bestPerStudent = await prisma.testRecord.groupBy({
     by: ['studentId'],
     _max: { averageScore: true }
@@ -80,11 +82,11 @@ async function computeMostCommonBandScoreFromBestAverages() {
 
   if (!bestPerStudent.length) return 'N/A'
 
-  // Round to nearest int and count frequency
+  // Round to nearest int and count frequency (include zero scores)
   const freq = new Map()
   for (const row of bestPerStudent) {
     const avg = Number(row?._max?.averageScore ?? 0)
-    if (!isFinite(avg) || avg <= 0) continue
+    if (!isFinite(avg)) continue
     const rounded = Math.round(avg)
     const key = String(rounded)
     freq.set(key, (freq.get(key) ?? 0) + 1)
@@ -92,7 +94,7 @@ async function computeMostCommonBandScoreFromBestAverages() {
 
   if (freq.size === 0) return 'N/A'
 
-  // Find mode; if tie, pick the highest
+  // Find mode; if tie, pick the lowest
   let modeKey = null
   let modeCount = -1
   for (const [key, count] of freq.entries()) {
@@ -101,7 +103,7 @@ async function computeMostCommonBandScoreFromBestAverages() {
       modeKey = key
       modeCount = count
     } else if (count === modeCount && modeKey !== null) {
-      if (num > Number(modeKey)) {
+      if (num < Number(modeKey)) {
         modeKey = key
       }
     }
@@ -111,22 +113,21 @@ async function computeMostCommonBandScoreFromBestAverages() {
 }
 
 /**
- * Compute class performance by category using band scores.
+ * Compute class performance by category using numeric scores.
  * Rules:
  * - Only include attempts that completed all categories for their test paper.
- * - For each category, include the attempt's bandScore once if the attempt covered that category.
- * - Category score is the average of bandScore across included attempts.
- * - KPI avgScore (Average Band Score) = average of all category averages.
+ * - For each category, include the attempt's totalScore once if the attempt covered that category.
+ * - Category score is the average of totalScore across included attempts.
+ * - KPI avgScore = average of all category averages.
  * - KPI totalStudents = total users with role STUDENT.
  */
 async function computeClassPerformance() {
   try {
-    // Load completed attempts with category info
+    // Load completed attempts with category info (include zero-score attempts)
     const attempts = await prisma.testAttempt.findMany({
       where: { 
         completedAt: { not: null },
-        categoryName: { not: null },
-        totalScore: { gt: 0 }
+        categoryName: { not: null }
       },
       select: {
         id: true,
@@ -141,15 +142,17 @@ async function computeClassPerformance() {
       return { categories: [], kpis: { avgScore: 0, totalStudents: totalStudentsCount } }
     }
 
-    // Aggregate scores per category
+    // Aggregate scores per category (all attempts, zero scores included)
     const perCategoryAgg = new Map() // categoryName -> { sum, count }
     for (const attempt of attempts) {
       const catName = attempt.categoryName
       if (!perCategoryAgg.has(catName)) {
         perCategoryAgg.set(catName, { sum: 0, count: 0 })
       }
-      perCategoryAgg.get(catName).sum += attempt.totalScore
-      perCategoryAgg.get(catName).count += 1
+      const raw = typeof attempt.totalScore === 'number' ? attempt.totalScore : 0
+      const bucket = perCategoryAgg.get(catName)
+      bucket.sum += raw
+      bucket.count += 1
     }
 
     // Compute averages and sort by category name (ascending)

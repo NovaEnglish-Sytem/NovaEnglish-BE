@@ -11,7 +11,7 @@ const QuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   role: z.enum(['STUDENT', 'TUTOR', 'ADMIN']).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  size: z.coerce.number().int().min(1).max(100).optional().default(20),
+  size: z.coerce.number().int().min(1).max(100).optional().default(10),
 })
 
 export async function GET(request) {
@@ -28,7 +28,7 @@ export async function GET(request) {
     const parsed = QuerySchema.safeParse(qp)
     if (!parsed.success) {
       // Fallback defaults
-      parsed.data = { page: 1, size: 20 }
+      parsed.data = { page: 1, size: 10 }
     }
     const { q, role, page, size } = parsed.data
 
@@ -42,27 +42,41 @@ export async function GET(request) {
       ]
     }
 
-    const [total, users] = await Promise.all([
-      prisma.user.count({ where }),
-      prisma.user.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * size,
-        take: size,
-        select: {
-          id: true,
-          email: true,
-          fullName: true,
-          phoneE164: true,
-          role: true,
-          isEmailVerified: true,
-          placeOfBirth: true,
-          dateOfBirth: true,
-          gender: true,
-          createdAt: true,
-        },
-      }),
-    ])
+    const allUsers = await prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phoneE164: true,
+        role: true,
+        isEmailVerified: true,
+        placeOfBirth: true,
+        dateOfBirth: true,
+        gender: true,
+        createdAt: true,
+      },
+    })
+
+    const rolePriority = { ADMIN: 0, TUTOR: 1, STUDENT: 2 }
+    allUsers.sort((a, b) => {
+      const ra = rolePriority[a.role] ?? 99
+      const rb = rolePriority[b.role] ?? 99
+      if (ra !== rb) return ra - rb
+
+      const nameA = String(a.fullName || '').toLowerCase()
+      const nameB = String(b.fullName || '').toLowerCase()
+      const nameCmp = nameA.localeCompare(nameB)
+      if (nameCmp !== 0) return nameCmp
+
+      return b.createdAt.getTime() - a.createdAt.getTime()
+    })
+
+    const total = allUsers.length
+    const start = (page - 1) * size
+    const end = start + size
+    const users = allUsers.slice(start, end)
 
     return json({
       ok: true,
@@ -70,7 +84,7 @@ export async function GET(request) {
       page,
       size,
       total,
-      totalPages: Math.ceil(total / size),
+      totalPages: Math.max(1, Math.ceil(total / size)),
     })
   } catch (err) {
     console.error('Users list error:', err)

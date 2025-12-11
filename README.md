@@ -51,7 +51,6 @@ Backend API untuk aplikasi NovaEnglish - Platform testing bahasa Inggris dengan 
 - ✅ Auto-submit expired tests
 - ✅ Temporary answer storage (hybrid localStorage + DB)
 - ✅ Automated scoring & grading
-- ✅ Band score conversion (IELTS-like)
 - ✅ Tutor feedback system
 
 ### Media Management
@@ -397,8 +396,7 @@ CRON_SECRET=your-cron-secret
 - **TestAttempt** - Single package attempt
 - **ActiveTestSession** - Active test session protection
 - **TemporaryAnswer** - Draft answers during test
-- **BandScore** - Band score mapping
-- **Feedback** - Tutor feedback per band
+ 
 
 ### Relations
 
